@@ -25,3 +25,4 @@ yarn-error.log*
 .idea
 /.parcel-cache/
 /dist/
+/.run/

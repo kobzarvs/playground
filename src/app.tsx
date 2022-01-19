@@ -12,7 +12,7 @@ import { LabelModesMap } from './models';
 import { LabelModes, LayoutSubMode, Presets } from './models/types';
 import { $diagram } from './models/graphite';
 import { FragmentOptions } from './models/diagram/renderFragment';
-import { run } from './models/ide/transformer';
+import { debouncedTransformCode, run } from './models/ide/transformer';
 import { $unitsWatchList, UnitsWatchList } from './models/ide/units-watch-list';
 import { $mode, setMode } from './models/ide/mode';
 import { LS_CODE_KEY, save } from './models/ide/code';
@@ -26,7 +26,7 @@ const domains: { [key: string]: Unit<any> } = {
 
 const subModeOptions = () => ['visible', 'transparent', 'removed'].map(m => <option key={m} value={m}>{m}</option>);
 
-let timer: NodeJS.Timeout;
+let timer: number;
 const MIN_HEIGHT = '150px';
 const MAX_HEIGHT = '50vh';
 
@@ -72,7 +72,7 @@ const StructurePanel = ({ data, editor }: { data: UnitsWatchList, editor: any })
 };
 
 const POPUP_ELEMENT_ID = 'popup-message';
-let popupTimer: NodeJS.Timeout;
+let popupTimer: number;
 
 export const popup = (html: string | HTMLElement | HTMLElement[] = '', timeout: number = Infinity, color: string = 'white') => {
   clearTimeout(popupTimer);
@@ -129,7 +129,7 @@ type ControlCenterProps = {
   onChange8: () => FragmentOptions
 }
 
-function ControlCenter(props:ControlCenterProps) {
+function ControlCenter(props: ControlCenterProps) {
   return <div className="actions">
     <div className="actions left">
       <label>
@@ -197,7 +197,7 @@ function ControlCenter(props:ControlCenterProps) {
 }
 
 export const App = () => {
-  const monaco = useMonaco();
+  const [editor, setEditor] = useState(null);
   const [height, setHeight] = useState(MIN_HEIGHT);
   const [hover, setHover] = useState(false);
   const [domain, setDomain] = useState(Object.keys(domains)[1]);
@@ -240,17 +240,18 @@ export const App = () => {
   }, [loaded]);
 
   useEffect(() => {
-    if (!monaco?.editor) return;
+    if (!editor) return;
     try {
       const text = localStorage.getItem(LS_CODE_KEY);
       const parsedValue = JSON.parse(text || '');
-      monaco.editor.setValue(parsedValue);
-      save(parsedValue);
+      editor.setValue(parsedValue);
+      debouncedTransformCode(parsedValue);
     } catch (e) {
       //
+      console.log(e);
     }
     setLoaded(true);
-  }, [monaco, setLoaded]);
+  }, [editor, setLoaded]);
 
   return (
     <div className="App">
@@ -315,15 +316,24 @@ export const App = () => {
       >
         <StructurePanel
           data={structure}
-          editor={monaco?.editor}
+          editor={editor}
         />
         <Editor
           className="editor"
           height="100%"
-          defaultLanguage="javascript"
-          defaultValue=""
+          defaultLanguage="typescript"
+          // defaultValue=""
           onChange={handleEditorChange}
           theme="light"
+          onMount={(editor) => setEditor(editor)}
+          saveViewState={true}
+          options={{
+            fontSize: 16,
+            mouseWheelZoom: true,
+            fontLigatures: true,
+            fontFamily: 'Fira Code',
+            tabSize: 2
+          }}
         />
       </div>
     </div>

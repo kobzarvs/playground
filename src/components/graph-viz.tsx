@@ -10,6 +10,8 @@ export const GraphViz = memo(({ dot }: { dot: string }) => (
       width: '20000',
       height: '20000',
       scale: 1.0,
+      engine: 'dot',
+      useWorker: false
     }}
     dot={dot}
   />

@@ -1,6 +1,7 @@
 import { createEvent, createStore, guard } from 'effector';
 import { debouncedTransformCode } from './transformer';
 import { $mode } from './mode';
+import { inspect } from 'effector-devtools';
 
 export const LS_CODE_KEY = 'effector-graphite-code';
 
@@ -15,7 +16,14 @@ $raw.updates.watch((value) => {
   debouncedTransformCode(value);
 });
 
-guard({
-  source: $mode,
-  filter: (mode) => mode.autorun,
-})
+// guard({
+//   source: $mode,
+//   filter: (mode) => mode.autorun,
+// })
+
+// inspect({
+//   $raw,
+//   event: {
+//     save
+//   }
+// });
