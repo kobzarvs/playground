@@ -1,0 +1,213 @@
+import { Node } from 'effector';
+import { NodeUnit, ScanGraphOptions, ScanGraphReturns } from '../types';
+import { detectOperator, getLabel, getLinks, getOp, getOwners, getShape, getShapeType, getType } from '../helpers';
+import { isDomainOrInternals } from '../is';
+
+const defaultOptions: ScanGraphOptions = {
+  links: {},
+  shapes: {},
+  visited: new Set(),
+  context: '',
+  domains: new Map(),
+};
+
+export function scanGraph(root: NodeUnit | NodeUnit[] | Set<NodeUnit>, options: ScanGraphOptions = defaultOptions): ScanGraphReturns {
+  if (!root) {
+    return options;
+  }
+
+  let links = options.links ||= {};
+  let shapes = options.shapes ||= {};
+  let visited = options.visited ||= new Set();
+  let parents = new Set<Node>();
+  let children = new Set<Node>();
+
+  let g: Node;
+
+  if ('graphite' in root) {
+    g = root.graphite as Node;
+  } else if (Array.isArray(root) || root instanceof Set) {
+    for (const r of Array.from(root)) {
+      scanGraph(r, options);
+    }
+    return options;
+  } else {
+    g = root as Node;
+  }
+
+  if (visited.has(g.id)) {
+    return options;
+  }
+
+  function buildShape(node: Node) {
+    const label = getLabel(node);
+    const styles = [
+      `label="${label}"`,
+      getShape(node),
+    ].filter(Boolean);
+    return `${node.id} [${styles.join(', ')}];`;
+  }
+
+  function drawLink(parent: Node, child: Node, edge: string = ''): void {
+    // if (shapes[parent.id]) {
+    //   console.error('double parent', getOp(getOwners(parent)[0]), getName(parent), getName(child));
+    // }
+    // if (shapes[child.id]) {
+    //   console.error('double child', getOp(getOwners(child)[0]), getName(parent), getName(child));
+    // }
+    shapes[parent.id] = buildShape(parent);
+    shapes[child.id] = buildShape(child);
+
+    const childShapeType = getShapeType(child);
+    const parentShapeType = getShapeType(parent);
+
+    let linkWeight;
+    switch (true) {
+      case childShapeType === 'watch':
+        linkWeight = 1;
+        break;
+      case parentShapeType === 'event':
+        linkWeight = 9;
+        break;
+      case parentShapeType === 'combined':
+      case childShapeType === 'combined':
+        linkWeight = 10;
+        break;
+      case parentShapeType === 'store' && childShapeType === 'store':
+        linkWeight = 10;
+        break;
+
+      default:
+        linkWeight = 1;
+    }
+
+    const linkStyles = [
+      `label="${edge}"`,
+      `fontsize=10`,
+      childShapeType === 'combined' ? 'dir=none' : null,
+      `weight=${linkWeight}`,
+    ].filter(Boolean);
+
+    if (links[`${parent.id} -> ${child.id}`]) {
+      console.error(`link ${parent.id} -> ${child.id}`);
+    }
+
+    links[`${parent.id} -> ${child.id}`] = (`${parent.id} -> ${child.id} [${linkStyles.join(', ')}];`);
+  }
+
+  // drawing domain region
+  switch (true) {
+    case getOp(g) === 'domain': {
+      visited.add(g.id);
+      const history = getLinks(g).filter(l => getOwners(l)[0].id === g.id);
+      const domainShapes = new Set();
+      const domainLinks = new Set();
+      let subDomains = new Set<string>();
+
+      for (const child of history) {
+        switch (true) {
+          case isDomainOrInternals(child):
+            visited.add(child.id);
+            break;
+          case getType(child) === 'domain':
+            scanGraph(child, options);
+            subDomains.add(child.id);
+            break;
+          default:
+            domainShapes.add(`${child.id} [label="${getLabel(child)}", ${getShape(child, g)}];`);
+            const linkStyles = isDomainOrInternals(child)
+              ? '[style=dashed, color=gray]'
+              : '';
+            domainLinks.add(`${child.id} ${linkStyles};`);
+            children.add(child);
+        }
+      }
+
+      options.domains.set(g.id, {
+        parents: getOwners(g).map(o => o.id),
+        children: subDomains,
+        subgraph: `
+          subgraph cluster_${g.id} {
+            style=filled;
+            label=<<font color="#707070"><b>${g.meta.name}</b></font>>;
+            color="#FF4500AF";
+            fillcolor="#FAEBD766";
+            margin=10;
+
+            ${[...subDomains].map(id => `/*domain_${id}*/`).join('\n')}
+            ${[...domainLinks].join('\n')}
+          }
+        `,
+      });
+
+      shapes[g.id] = Array.from(domainShapes).join('\n');
+      break;
+    }
+
+    // case getOp(g) === 'effect' || isEffectInternals(g): {
+    //   break;
+    // }
+
+    default:
+      for (const owner of getOwners(g)) {
+        parents.add(owner);
+      }
+
+      for (const child of getLinks(g)) {
+        if (getType(g) !== 'crosslink' && getOwners(g).some(j => child.id === j.id)) {
+          continue;
+        }
+
+        // console.log(getLabel(g), g);
+
+        // drawing edges: on, map, combine, restore
+        if (['on', 'map', 'combine', undefined, 'filterMap'].includes(getOp(child))) {
+          for (let sl of getLinks(child, g.id)) {
+            // let op = getOp(child);
+            // if (!op) {
+            //   console.error('**************', g, child);
+            // }
+            // console.log(getLabel(sl), sl);
+            const isWatch = getOp(sl) === 'watch';
+            const isLeaf = sl.meta?.named && sl.next.length === 0;
+            const isSelfLink = g.id === sl.id;
+            if (isWatch || isSelfLink) {
+              console.error('is', isLeaf, isWatch, isSelfLink);
+              throw Error();
+            }
+            if (isWatch || (!isLeaf && !isSelfLink)) {
+              drawLink(g, sl, detectOperator(g, child, sl));
+            }
+            // drawLink(g, sl, g.id + ' ' + (getOp(sl) || 'restore') + ' ' + sl.id);
+            // drawLink(g, sl, getName(g) + ' ' + (getOp(sl) || 'restore') + ' ' + getName(sl));
+            children.add(sl);
+          }
+          children.add(child);
+          continue;
+        }
+
+        const isWatch = getOp(child) === 'watch';
+        const isLeaf = child.meta?.named && child.next.length === 0;
+        const isSelfLink = g.id === child.id;
+        const isServiceEdges = ['on', 'map', 'combine', undefined, 'filterMap'].includes(getOp(g))
+          || ['on', 'map', 'combine', undefined, 'filterMap'].includes(getOp(child));
+
+        if (isWatch || (!isLeaf && !isServiceEdges && !isSelfLink)) {
+          // drawLink(g, child, child.id);
+          drawLink(g, child);
+        } else {
+          console.error('***', getLabel(g), getLabel(child));
+        }
+        children.add(child);
+      }
+  }
+
+  visited.add(g.id);
+
+  return scanGraph([...parents, ...children], {
+    ...options,
+    links,
+    shapes,
+    visited,
+  });
+}

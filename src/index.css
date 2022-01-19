@@ -1,0 +1,219 @@
+/*@tailwind base;*/
+/*@tailwind components;*/
+/*@tailwind utilities;*/
+
+html, body {
+    margin: 0;
+    font-size: 1rem;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+body * {
+    /*box-sizing: border-box;*/
+}
+
+input[type="checkbox"] {
+    transform: scale(1.25) translateY(1px);
+}
+
+select, option, optgroup, label {
+    font-size: 1em;
+    padding: 0 5px;
+}
+
+button {
+    font-size: 1em;
+    padding: 0 10px;
+}
+
+code {
+    font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+.App {
+    text-align: center;
+    height: 100vh;
+    width: 100vw;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.actions {
+    display: flex;
+    row-gap: 2px;
+    column-gap: 10px;
+    justify-content: space-between;
+    align-items: flex-start;
+    background-color: #c0c0c0;
+    border-bottom: 1px solid gray;
+    box-sizing: border-box;
+    flex-wrap: wrap;
+    padding: 2px;
+    box-shadow: 0 2px 6px lightgrey;
+    height: 28px;
+    line-height: 24px;
+}
+
+.actions > .left,
+.actions > .right {
+    height: 0;
+    box-shadow: none;
+    justify-content: flex-start;
+    border: none;
+    padding: 0;
+    margin: 0;
+}
+
+.actions > .right {
+    justify-content: flex-end;
+}
+
+.actions label {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+    margin: 0;
+    padding: 0;
+}
+
+.actions > label {
+    border-bottom: none;
+}
+
+.toggle {
+    color: white;
+}
+
+.actions .toggle[data-value="start"] {
+    background-color: #3CB371;
+}
+
+.actions .toggle[data-value="stop"] {
+    background-color: #FF4500;
+}
+
+.toggle:hover {
+    opacity: .85;
+}
+
+div.graph {
+    width: 100vw;
+    height: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+    z-index: 0;
+}
+
+.monaco-editor {
+}
+
+.ide {
+    position: fixed;
+    bottom: 0;
+    border: 1px solid gray;
+    box-shadow: 0 -4px 10px lightgray;
+    display: flex;
+    width: 100vw;
+    max-height: 100vh;
+    height: 100%;
+    z-index: 20;
+    transition: height 150ms;
+    background-color: white;
+}
+
+.sidebar {
+    flex: 0 1 150px;
+    width: 180px;
+    /*border: 2px solid blue;*/
+    box-sizing: border-box;
+    border-right: 1px solid gray;
+    height: 100%;
+    padding: 0;
+    text-align: left;
+    display: flex;
+    flex-flow: nowrap column;
+    justify-content: flex-start;
+}
+
+.sidebar > h2 {
+    padding: 5px;
+    margin: 0;
+    background-color: lightgrey;
+    flex: 0 1 20px;
+    font-size: 1em;
+    border-bottom: 1px solid gray;
+}
+
+.sidebar > .structure {
+    flex: 1 1 100%;
+    padding: 5px;
+    overflow: auto;
+    cursor: pointer;
+}
+
+.sidebar > .structure > details {
+}
+
+.sidebar > .structure > details > summary {
+    font-weight: bold;
+    padding: 10px 0 2px 0;
+}
+
+.sidebar > .structure .structure__unit {
+    padding: 0 15px;
+    font-weight: normal;
+}
+
+.ide > section {
+    /*border: 2px solid red;*/
+    flex: 1 0 100vw;
+    max-width: calc(100vw - 150px);
+    width: calc(100vw - 150px);
+    height: 100%;
+    box-sizing: border-box;
+}
+
+/*.editor:hover {*/
+/*    height: 50vh;*/
+/*}*/
+
+#popup-message {
+    position: fixed;
+    top: 40px;
+    right: 20px;
+    border: 1px solid gray;
+    border-radius: 5px;
+    box-shadow: 2px 2px 6px gray;
+    padding: 5px 10px;
+    display: flex;
+    gap: 5px;
+}
+
+#root {
+    position: fixed;
+    top: 25px;
+    right: 0;
+    height: calc(100vh - 20px - 40px);
+    width: auto;
+    max-width: 40vw;
+    border: 1px solid gray;
+    background-color: #ffffffc0;
+    padding: 10px 0;
+    box-shadow: 0 0 12px lightgray;
+    overflow: auto;
+
+    transition: width 150ms;
+}
+
+label {
+    display: flex;
+    justify-content: flex-start;
+    align-items: flex-start;
+    /*border: 1px solid red !important;*/
+    box-sizing: border-box;
+}
