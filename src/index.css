@@ -81,7 +81,7 @@ div.graph {
 
 .popup-row {
     display: flex;
-    flex: 1 1 100%;
+    /*flex: 1 1 100%;*/
     align-items: center;
     box-sizing: border-box;
     /*width: inherit;*/

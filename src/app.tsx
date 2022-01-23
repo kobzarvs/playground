@@ -320,12 +320,10 @@ const buildComponent = (el: HTMLElement) => {
       }
       return perform;
     },
-
     gap(value: any) {
       perform.el.style.gap = getValue(value);
       return perform;
     },
-
     p(...values: any) {
       perform.el.style.padding = getParams(values);
       return perform;
@@ -356,7 +354,6 @@ const buildComponent = (el: HTMLElement) => {
       perform.el.style.paddingTop = getValue(value);
       return perform;
     },
-
     m(...values: any) {
       perform.el.style.margin = getParams(values);
       return perform;
@@ -387,7 +384,6 @@ const buildComponent = (el: HTMLElement) => {
       perform.el.style.marginTop = getValue(value);
       return perform;
     },
-
     border(value: any, color?: any) {
       perform.el.style.border = `${getValue(value)} solid black`;
       if (color) {
@@ -395,7 +391,6 @@ const buildComponent = (el: HTMLElement) => {
       }
       return perform;
     },
-
     bg(value: any) {
       perform.el.style.background = value;
       return perform;
@@ -408,9 +403,9 @@ const buildComponent = (el: HTMLElement) => {
       perform.el.style.color = value;
       return perform;
     },
-
     size(value: any, value2?: any) {
       perform.w(value);
+      perform.h(value);
       perform.h(value2);
       return perform;
     },
@@ -426,7 +421,6 @@ const buildComponent = (el: HTMLElement) => {
       perform.el.style.maxHeight = getValue(value);
       return perform;
     },
-
     bold(value: any) {
       perform.el.style.fontWeight = getValue(value) || 'bold';
       return perform;
@@ -435,7 +429,6 @@ const buildComponent = (el: HTMLElement) => {
       perform.el.style.fontSize = getValue(value);
       return perform;
     },
-
   };
 
   Object.assign(perform, result);
