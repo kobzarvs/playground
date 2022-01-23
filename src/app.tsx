@@ -571,11 +571,12 @@ const col = (...content: any) => {
   return obj;
 };
 
-function repeat(n: any, cb: (i: number) => any): any {
+function repeat(n: any, cb: (i: number, count: number) => any): any {
   function getResult(count: number) {
     let result: any = [];
-    for(let idx = 0; idx < clamp(count, 0, 300); idx++) {
-      result.push(cb(idx));
+    count = clamp(count, 0, 300);
+    for(let idx = 0; idx < count; idx++) {
+      result.push(cb(idx, count));
     }
     return result;
   }

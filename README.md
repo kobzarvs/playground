@@ -52,3 +52,34 @@ render(
   )
 )
 ```
+
+### Chessboard example
+
+![Chessboard](public/example-3.jpg)
+
+```javascript
+const black = div().size(40).border(1).center().bg('burlywood');
+const white = div().size(40).border(1).center().bg('#efefef');
+
+const setRows = createEvent();
+const $rows = restore(setRows, 3);
+
+const setCols = createEvent();
+const $cols = restore(setCols, 8);
+
+
+render(
+  row(
+    input('Rows', $rows, setRows),
+    input('Columns', $cols, setCols),
+  ).gap(10),
+
+  col($rows, line => 
+    row($cols, (column, total) => (column + line) % 2 
+      ? black(line * total + column + 1) 
+      : white(line * total + column + 1)
+    ),
+  )
+);
+
+```
