@@ -9,6 +9,7 @@ import * as forest from 'forest';
 import React from 'react';
 import ReactDOM from 'react-dom';
 import { reset, units } from './units-watch-list';
+import { clearRender, POPUP_ELEMENT_ID } from '../../app';
 
 // import postcss from 'postcss';
 // import autoprefixer from 'autoprefixer';
@@ -43,7 +44,7 @@ function css(tags: any, ...attrs: any[]) {
 let id = 0;
 
 export function execute(result: BabelFileResult) {
-  const popup = document.querySelector('#popup-message');
+  const popup = document.querySelector(POPUP_ELEMENT_ID);
   popup && document.body.removeChild(popup);
   const node = document.getElementById('insertedStyle');
   node && document.head.removeChild(node);
@@ -60,20 +61,15 @@ export function execute(result: BabelFileResult) {
   let timer;
 
   try {
-    Object.assign(window, forest);
-    Object.assign(window, foliage);
-    Object.assign(window, effector);
-    Object.assign(window, effectorReact);
+    // @ts-ignore
+    Object.keys(effector).forEach(e => window[e] = effector[e]);
+    // @ts-ignore
+    Object.keys(effectorReact).forEach(e => window[e] = effectorReact[e]);
+    // Object.assign(window, effector);
+    // Object.assign(window, effectorReact);
     Object.assign(window, {
       React,
       ReactDOM,
-      render: (content: any) => {
-        ReactDOM.render(
-          // @ts-ignore
-          content,
-          ROOT,
-        );
-      },
       ROOT,
       css,
       patronum,
@@ -159,7 +155,9 @@ export function execute(result: BabelFileResult) {
       }, 10000);
       try {
         if (typeof result.code === 'string') {
+          // console.log(result.code);
           reset();
+          clearRender();
           const context = {};
           resolve({
             context, result: eval.call(

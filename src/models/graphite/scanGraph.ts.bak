@@ -17,7 +17,6 @@ export function scanGraph(root: NodeUnit | NodeUnit[] | Set<NodeUnit>, options: 
   }
 
   let links = options.links ||= {};
-  let shapes = options.shapes ||= {};
   let visited = options.visited ||= new Set();
   let parents = new Set<Node>();
   let children = new Set<Node>();

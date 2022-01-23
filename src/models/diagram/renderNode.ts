@@ -1,11 +1,11 @@
 import { Node } from 'effector';
 import { nodeBgColors, nodeFgColors, NodeShapes } from '../const';
 import { renderTableNode } from './renderTableNode';
-import { FragmentOptions } from './renderFragment';
 import { getShapeType } from '../helpers';
 import { LabelModes } from '../types';
+import { ViewSettings } from '../ide/view-settings';
 
-export function renderNode(node: Node, opts: FragmentOptions): string {
+export function renderNode(node: Node, opts: ViewSettings): string {
   let label;
   switch (opts.labels) {
     case LabelModes.ID:
@@ -30,8 +30,8 @@ export function renderNode(node: Node, opts: FragmentOptions): string {
         type: node.family.type || '-',
         name: node.meta.name || '-',
         named: node.meta.named || '-',
-        links: `<b><font color="#707070">${node.family.owners.length}</font>&nbsp;&nbsp;<font color="blue">${node.family.links.length}</font>&nbsp;&nbsp;<font color="red">${node.next.length}</font></b>`,
-      }, opts.prefix, opts.shapes?.colored);
+        links: `<b><font color="#707070">${node.family.owners.length}</font>&nbsp;<font color="blue">${node.family.links.length}</font>&nbsp;<font color="red">${node.next.length}</font></b>`,
+      }, opts.prefix, opts.colored);
 
     case LabelModes.AUTO_NAME:
       label = node.meta?.named || node.meta?.name || node.meta.op || node.family.type;
@@ -45,9 +45,9 @@ export function renderNode(node: Node, opts: FragmentOptions): string {
   const bgcolor = nodeBgColors[shapeType];
   const fgcolor = nodeFgColors[shapeType];
 
-  label = `<<font color="${opts.shapes?.colored ? fgcolor : 'black'}"><b>${label}</b></font>>`;
-  const colors = opts.shapes?.colored ? `style=filled fillcolor="${bgcolor}"` : '';
-  const shape = opts.shapes?.styled ? NodeShapes[shapeType] : 'rect';
+  label = `<<font color="${opts.colored ? fgcolor : 'black'}"><b>${label}</b></font>>`;
+  const colors = opts.colored ? `style=filled fillcolor="${bgcolor}"` : '';
+  const shape = opts.styled ? NodeShapes[shapeType] : 'rect';
 
   return `"${opts.prefix}${node.id}" [shape="${shape}" label=${label} ${colors}]`;
 }

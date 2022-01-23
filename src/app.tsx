@@ -1,227 +1,646 @@
+import ReactDOM from 'react-dom';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Unit } from 'effector';
 import { useStore } from 'effector-react';
-import Editor, { Monaco, useMonaco } from '@monaco-editor/react';
-
-import './examples/counter';
-import { $counter, effect } from './examples/counter';
-import { $fullName } from './examples/glitch';
-import { $todos } from './examples/todo-list-with-validation';
+import Editor from '@monaco-editor/react';
 import { GraphViz } from './components/graph-viz';
-import { LabelModesMap } from './models';
-import { LabelModes, LayoutSubMode, Presets } from './models/types';
 import { $diagram } from './models/graphite';
-import { FragmentOptions } from './models/diagram/renderFragment';
 import { debouncedTransformCode, run } from './models/ide/transformer';
-import { $unitsWatchList, UnitsWatchList } from './models/ide/units-watch-list';
-import { $mode, setMode } from './models/ide/mode';
+import { $unitsWatchList } from './models/ide/units-watch-list';
+import { $mode, ViewSettings, setMode } from './models/ide/view-settings';
 import { LS_CODE_KEY, save } from './models/ide/code';
 
-const domains: { [key: string]: Unit<any> } = {
-  'effect': effect,
-  '$todos': $todos,
-  '$counter': $counter,
-  '$fullName': $fullName,
-};
+import Button from '@mui/material/Button';
+import AppBar from '@mui/material/AppBar';
+import Toolbar from '@mui/material/Toolbar';
+import Typography from '@mui/material/Typography';
+import IconButton from '@mui/material/IconButton';
+import { Box, Checkbox, Divider, Stack } from '@mui/material';
+import FormControlLabel from '@mui/material/FormControlLabel';
+import { grey } from '@mui/material/colors';
+import { StructurePanel } from './models/ide/view/structurePanel';
 
-const subModeOptions = () => ['visible', 'transparent', 'removed'].map(m => <option key={m} value={m}>{m}</option>);
+import { Autorenew, Menu, Minimize, PlayArrow } from '@mui/icons-material';
+import { ViewSettingsPopup } from './models/ide/view/view-settings-popup';
+import { toolbarButtonStyle } from './models/ide/view/styles';
+import { theme } from './theme';
+import { is } from 'effector';
+import { getTimelineSeparatorUtilityClass } from '@mui/lab';
+import { clamp } from 'lodash';
 
-let timer: number;
+let timer: NodeJS.Timeout;
 const MIN_HEIGHT = '150px';
 const MAX_HEIGHT = '50vh';
 
-const buildOptionsWithGroups = ({ data }: { data: UnitsWatchList }) =>
-  Object.entries(data).map(([group, units]) => (
-    units.length !== 0 && <optgroup key={group} label={group}>
-      {units.map((unit, i) => (
-        // @ts-ignore
-        <option key={`${unit.graphite.sid}_${i}`}>{unit.shortName}</option>
-      ))}
-    </optgroup>
-  ));
+export const POPUP_ELEMENT_ID = 'popup-root';
+let popupTimer: NodeJS.Timeout;
 
-const StructurePanel = ({ data, editor }: { data: UnitsWatchList, editor: any }) => {
-  const setPos = (unit: Unit<any>) => {
-    // @ts-ignore
-    const loc = unit?.defaultConfig?.loc;
-  };
-  // editor.setPosition({ column: 3, lineNumber: 3 });
-  const units = Object.entries(data).map(([group, units]) => (
-    units.length !== 0 && <details key={group} open={true}>
-      <summary>{group}</summary>
-      {units.map((unit, i) => {
-        return (
-          // @ts-ignore
-          <div className="structure__unit" key={`${unit.graphite.sid}_${i}`} onClick={() => setPos(unit)}>
-            {/* @ts-ignore */}
-            {unit.shortName}
-          </div>
-        );
-      })}
-    </details>
-  ));
+let savedPoint = null;
+let savedMinimized = false;
+let popupId = 0;
 
-  return (
-    <aside className="sidebar">
-      <h2>Structure</h2>
-      <div className="structure">
-        {units.length ? units : <h3 style={{ color: '#aaa' }}>No units</h3>}
+export const clearRender = () => {
+  clearTimeout(popupTimer);
+  let root = document.querySelector(`#${POPUP_ELEMENT_ID}`);
+  root && document.body.removeChild(root);
+}
+
+export const popup = (...content: any) => {
+  clearRender();
+  let root;
+  root = createElement('div');
+  root.id = POPUP_ELEMENT_ID;
+  root.innerHTML = '';
+
+  const popup = createDomElement(null, [content].flat());
+
+  const PopupWindow = () => {
+    const [minimized, toggleMinimized] = useState(savedMinimized);
+    const graphRef = useRef(null);
+    const ref = useRef<HTMLDivElement>(null);
+
+    // useLayoutEffect(() => {
+    //   if (!ref.current) return;
+    //
+    //   requestAnimationFrame(() => {
+    //     if (!ref.current) return;
+    //     const el = ref.current;
+    //     console.log(el);
+    //     const bounds = el!.getBoundingClientRect();
+    //     console.log('bounds', el!.offsetWidth, bounds.width);
+    //     // bounds.width += 24;
+    //     bounds.x = clamp(bounds.x, 0, window.innerWidth - bounds.width - 2);
+    //     bounds.y = clamp(bounds.y, 0, window.innerHeight - bounds.height - 2);
+    //     el!.style.top = `${bounds.y}px`;
+    //     el!.style.left = `${bounds.x}px`;
+    //     el!.style.width = `${bounds.width}px`;
+    //     el!.style.height = `${bounds.height}px`;
+    //   });
+    // }, [ref.current]);
+
+    const popupBodyRef = useRef<HTMLDivElement>(null);
+
+    return <div
+      ref={ref}
+      id="popup"
+      // animate={{ height: minimized ? 33 : 'auto' }}
+      style={{
+        // left: savedPoint?.x || (window.innerWidth - 300),
+        // top: savedPoint?.y || 50,
+        height: minimized ? 34 : popupBodyRef.current?.offsetHeight ? popupBodyRef.current?.offsetHeight + 34 : 'fit-content',
+        width: minimized ? 120 : 'fit-content',
+      }}
+      // drag="x"
+      // dragMomentum={false}
+      // // dragConstraints={graphRef}
+      // onDragTransitionEnd={() => {
+      //   savedPoint = ref.current.getBoundingClientRect();
+      //   if (savedPoint.x < 0) {
+      //     requestAnimationFrame(() => {
+      //       console.log(ref.current.style.transform, ref.current.style.left, savedPoint.x);
+      //       const tx = parseFloat(ref.current.style.transform.match(/translateX\((?<x>.*)px\)/)?.groups?.x, 10);
+      //       // ref.current.style.transform = `translateX(${Math.floor(tx) - Math.floor(savedPoint.x) * 2})`;
+      //       ref.current.style.transform = `translateX(0)`;
+      //       console.log(ref.current.style.transform);
+      //     });
+      //     //   console.log('LEFT');
+      //   }
+      //   // if (savedPoint.x > window.innerWidth - savedPoint.window) {
+      //   //   ref.current.style.left = `${window.innerWidth - savedPoint.window}px`;
+      //   //   console.log('RIGHT');
+      //   // }
+      // }}
+    >
+      <Box
+        sx={{
+          display: 'flex',
+          py: 0,
+          pl: 2,
+          alignItems: 'center',
+          background: theme.palette.secondary.main,
+          color: 'white',
+        }}
+      >
+        {/*<IconButton size="small" edge="start" color="inherit" aria-label="menu">*/}
+        {/*  <Menu />*/}
+        {/*</IconButton>*/}
+        <Typography variant="subtitle1" color="inherit" style={{ flexGrow: 1 }}>
+          Render
+        </Typography>
+        <IconButton
+          size="small" edge="end" color="inherit"
+          onClick={() => {
+            toggleMinimized(!minimized);
+            savedMinimized = !minimized;
+          }}
+        >
+          <Minimize />
+        </IconButton>
+      </Box>
+      <div id="popup-body"
+           ref={popupBodyRef}
+           style={{
+             maxHeight: `calc(100vh - 180px - ${MIN_HEIGHT})`,
+           }}
+      >
       </div>
-    </aside>
-  );
+      {/*</div>*/}
+    </div>;
+  };
+
+  ReactDOM.render(<PopupWindow key={popupId++} />, root);
+  document.body.appendChild(root);
+
+  const body = document.getElementById('popup-body');
+  body?.appendChild(popup.el);
+
+  popup.close = () => {
+    document.body.removeChild(popup.el);
+    return popup;
+  };
+  popup.timeout = (ms: number) => {
+    popupTimer = setTimeout(popup.close, ms);
+    return popup;
+  };
+  popup.class = (className: string) => {
+    popup.el.className = className;
+    return popup;
+  };
+  popup.pos = (first: any, last?: any, width?: any, height?: any) => {
+    if (typeof first === 'object') {
+      Object.keys(first).forEach(key => {
+        if (['left', 'right', 'top', 'left', 'width', 'height'].includes(key) && typeof first[key] === 'number') {
+          first[key] = `${first[key]}px`;
+        }
+      });
+      Object.assign(body.style, first);
+    } else {
+      body.style.left = typeof first === 'number' ? `${first}px` : first;
+      body.style.top = typeof last === 'number' ? `${last}px` : last;
+      body.style.width = typeof width === 'number' ? `${width}px` : width;
+      body.style.height = typeof height === 'number' ? `${height}px` : height;
+    }
+    return popup;
+  };
+
+  return popup;
 };
 
-const POPUP_ELEMENT_ID = 'popup-message';
-let popupTimer: number;
+const setContent = (el: HTMLElement | DocumentFragment | undefined, value: any) => {
+  switch (el?.nodeType) {
+    case 1:
+      if (el && el instanceof HTMLElement) {
+        el.innerHTML = value;
+      }
+      break;
+    case 11:
+    case 3:
+    default:
+      if (el) {
+        el.textContent = value;
+      }
+  }
+};
 
-export const popup = (html: string | HTMLElement | HTMLElement[] = '', timeout: number = Infinity, color: string = 'white') => {
-  clearTimeout(popupTimer);
-  const popup: HTMLDivElement = document.querySelector(`#${POPUP_ELEMENT_ID}`) || document.createElement('div');
+const getParams = (values: any[], separator: string = ' '): string => {
+  const result: string[] = [];
+  values.forEach((val: any) => result.push(getValue(val)));
+  return result.join(separator);
+};
 
-  popup.id = POPUP_ELEMENT_ID;
-  if (typeof html === 'string') {
-    popup.innerHTML = html;
-  } else {
-    if (Array.isArray(html)) {
-      popup.innerHTML = '';
-      html.forEach(el => popup.appendChild(el));
+const getValue = (value: any): string => {
+  if (typeof value === 'number') return `${value}px`;
+  return value;
+};
+
+const buildComponent = (el: HTMLElement) => {
+  function perform(...content: any) {
+    // @ts-ignore
+    const newComponent = buildComponent(perform.el.cloneNode(true));
+    if ([content].flat().length !== 0) {
+      newComponent.el.innerHTML = '';
+    }
+    newComponent.el = createDomElement(el.tagName, [content].flat(), newComponent.el).el;
+    // @ts-ignore
+    perform.el.style = el.style.cssText;
+    return newComponent;
+  }
+
+  perform.el = el;
+
+  const result = {
+    el,
+    clone(content: any) {
+      // @ts-ignore
+      // const newComponent = buildComponent(perform.el!.cloneNode(false));
+      if (content) {
+        return createDomElement('div', content);
+      } else {
+        // return newComponent;
+      }
+    },
+    class(className: string) {
+      perform.el.className = `${perform.el.className} ${className}`;
+      return perform;
+    },
+    style(value: CSSStyleDeclaration | string | any) {
+      if (typeof (value) === 'string') {
+        // @ts-expect-error
+        perform.el!.style = value;
+      } else if (value instanceof CSSStyleDeclaration) {
+        // @ts-expect-error
+        perform.el!.style = value.cssText;
+      } else if ('el' in value) {
+        // @ts-expect-error
+        perform.el!.style = value.el.style.cssText;
+      }
+      return perform;
+    },
+    onClick(handler: any) {
+      const prevHandler = perform.el.onclick;
+      perform.el.onclick = (e) => {
+        handler && handler(e);
+        // @ts-expect-error
+        prevHandler && prevHandler(e);
+      };
+      return perform;
+    },
+    close() {
+      document.body.removeChild(perform.el);
+      return perform;
+    },
+    timeout(ms: number) {
+      setTimeout(this.close, ms);
+    },
+    end() {
+      perform.el.style.alignSelf = 'flex-end';
+      return perform;
+    },
+    start() {
+      perform.el.style.alignSelf = 'flex-start';
+      return perform;
+    },
+    right(value?: any) {
+      perform.el.style.display = 'flex';
+      perform.el.style.justifyContent = 'flex-end';
+      perform.el.style.alignSelf = 'flex-end';
+      if (value) {
+        return perform.pr(value);
+      }
+      return perform;
+    },
+    left(value?: any) {
+      perform.el.style.display = 'flex';
+      perform.el.style.justifyContent = 'flex-start';
+      perform.el.style.alignSelf = 'flex-start';
+      if (value) {
+        return perform.pl(value);
+      }
+      return perform;
+    },
+    center() {
+      perform.el.style.display = 'flex';
+      perform.el.style.justifyContent = 'center';
+      perform.el.style.alignItems = 'center';
+      perform.el.style.alignSelf = 'center';
+      return perform;
+    },
+    top(value?: any) {
+      perform.el.style.display = 'flex';
+      perform.el.style.alignItems = 'flex-start';
+      if (value) {
+        return perform.pt(value);
+      }
+      return perform;
+    },
+    bottom(value?: any) {
+      perform.el.style.display = 'flex';
+      perform.el.style.alignItems = 'flex-end';
+      if (value) {
+        return perform.pb(value);
+      }
+      return perform;
+    },
+
+    gap(value: any) {
+      perform.el.style.gap = getValue(value);
+      return perform;
+    },
+
+    p(...values: any) {
+      perform.el.style.padding = getParams(values);
+      return perform;
+    },
+    px(value: any) {
+      perform.el.style.paddingLeft = getValue(value);
+      perform.el.style.paddingRight = getValue(value);
+      return perform;
+    },
+    pr(value: any) {
+      perform.el.style.paddingRight = getValue(value);
+      return perform;
+    },
+    pl(value: any) {
+      perform.el.style.paddingLeft = getValue(value);
+      return perform;
+    },
+    py(value: any) {
+      perform.el.style.paddingTop = getValue(value);
+      perform.el.style.paddingBottom = getValue(value);
+      return perform;
+    },
+    pb(value: any) {
+      perform.el.style.paddingBottom = getValue(value);
+      return perform;
+    },
+    pt(value: any) {
+      perform.el.style.paddingTop = getValue(value);
+      return perform;
+    },
+
+    m(...values: any) {
+      perform.el.style.margin = getParams(values);
+      return perform;
+    },
+    mx(value: any) {
+      perform.el.style.marginLeft = getValue(value);
+      perform.el.style.marginRight = getValue(value);
+      return perform;
+    },
+    mr(value: any) {
+      perform.el.style.marginRight = getValue(value);
+      return perform;
+    },
+    ml(value: any) {
+      perform.el.style.marginLeft = getValue(value);
+      return perform;
+    },
+    my(value: any) {
+      perform.el.style.marginTop = getValue(value);
+      perform.el.style.marginBottom = getValue(value);
+      return perform;
+    },
+    mb(value: any) {
+      perform.el.style.marginBottom = getValue(value);
+      return perform;
+    },
+    mt(value: any) {
+      perform.el.style.marginTop = getValue(value);
+      return perform;
+    },
+
+    border(value: any, color?: any) {
+      perform.el.style.border = `${getValue(value)} solid black`;
+      if (color) {
+        perform.el.style.borderColor = color;
+      }
+      return perform;
+    },
+
+    bg(value: any) {
+      perform.el.style.background = value;
+      return perform;
+    },
+    fg(value: any) {
+      perform.el.style.color = value;
+      return perform;
+    },
+    color(value: any) {
+      perform.el.style.color = value;
+      return perform;
+    },
+
+    size(value: any, value2?: any) {
+      perform.w(value);
+      perform.h(value2);
+      return perform;
+    },
+    w(value: any) {
+      if (typeof value === 'undefined') return perform;
+      perform.el.style.width = getValue(value);
+      perform.el.style.maxWidth = getValue(value);
+      return perform;
+    },
+    h(value: any) {
+      if (typeof value === 'undefined') return perform;
+      perform.el.style.height = getValue(value);
+      perform.el.style.maxHeight = getValue(value);
+      return perform;
+    },
+
+    bold(value: any) {
+      perform.el.style.fontWeight = getValue(value) || 'bold';
+      return perform;
+    },
+    fontSize(value: any) {
+      perform.el.style.fontSize = getValue(value);
+      return perform;
+    },
+
+  };
+
+  Object.assign(perform, result);
+
+  return perform;
+};
+
+const createElement = (tag: string) => {
+  const el = document.createElement(tag);
+  el.style.boxSizing = 'border-box';
+  return el;
+};
+
+function createDomElement<T>(tag: string | null, content?: any, el?: T | DocumentFragment | undefined) {
+  // @ts-expect-error
+  el = el || (tag ? createElement(tag) : document.createDocumentFragment());
+
+  // content = typeof content === 'function' ? content(content) : content;
+
+  if (is.store(content)) {
+    // @ts-ignore
+    el = createElement('span');
+    content.watch(value => {
+      // console.log('watch', content.shortName, value, el, el?.nodeType);
+      setContent(el, value);
+    });
+  } else if (is.event(content) || is.effect(content)) {
+    const prevHandler = el.onclick;
+    el.onclick = e => {
+      console.log('onclick', content.shortName);
+      prevHandler && prevHandler(e);
+      content(e);
+    };
+  } else if (content?.$$typeof === Symbol.for('react.element')) {
+    el = createElement('span');
+    ReactDOM.render(content, el);
+  } else if (Array.isArray(content)) {
+    content.forEach(c => {
+      const sub = createDomElement(null, c).el;
+      el.appendChild(sub);
+    });
+  } else if (content instanceof HTMLElement || content?.el instanceof HTMLElement) {
+    if (content?.el instanceof HTMLElement) {
+      el.appendChild(content.el);
     } else {
-      popup.replaceChildren(html);
+      el.appendChild(createDomElement('div', content).el);
+    }
+  } else if (typeof content === 'function' || typeof content === 'object') {
+    console.error(content);
+  } else {
+    setContent(el, content);
+  }
+
+  return buildComponent(el);
+}
+
+const input = (...content: any) => {
+  const event = content.find(c => is.event(c));
+  const store = content.find(c => is.store(c));
+  const label = content.find(c => typeof (c) === 'string') || store?.shortName;
+  const i = createDomElement<HTMLInputElement>('input');
+  i.el.className = 'popup-input';
+  i.el.oninput = (e) => {
+    // @ts-expect-error
+    event && event(e.target?.value);
+    e.preventDefault();
+  };
+  if (is.store(store)) {
+    // @ts-expect-error
+    store.watch((value: any) => i.el.value = value);
+    if (typeof store.getState() === 'number') {
+      i.el.type = 'number';
+    } else {
+      i.el.type = 'text';
     }
   }
-  popup.style.backgroundColor = color;
-  document.body.appendChild(popup);
-  if (timeout !== Infinity) {
-    popupTimer = setTimeout(() => document.body.removeChild(popup), timeout);
+  if (label) {
+    const l = createElement('label');
+    l.innerHTML = `<div class="popup-label">${label}</div>`;
+    l.appendChild(i.el);
+    return buildComponent(l);
+  } else {
+    return i;
   }
-  return {
-    close() {
-      document.body.removeChild(popup);
-    },
-  };
 };
 
-const button = (text: string, callback: () => void) => {
-  const btn = document.createElement('button');
-  btn.innerHTML = text;
-  btn.onclick = () => {
-    callback && callback();
-  };
+const button = (...content: any) => {
+  let btn;
+  const event = content.find((c: any) => is.event(c));
+  if (content.length === 1 && event) {
+    btn = createDomElement<HTMLButtonElement>('button', event.shortName);
+    btn.onClick(event);
+  } else if (event) {
+    btn = createDomElement<HTMLButtonElement>('button', content.filter((c: any) => !is.event(c)));
+    btn.onClick(event);
+  } else {
+    btn = createDomElement<HTMLButtonElement>('button', content);
+  }
+  btn.el.className = 'popup-button';
   return btn;
 };
 
+const use = (...content: any) => {
+  const units = content.filter(c => is.unit(c));
+  const rc = content.filter(c => c?.$$typeof === Symbol.for('react.element'));
+
+};
+
+const grid = (...content: any) => {
+  const obj = createDomElement<HTMLDivElement>('grid', content);
+  return obj;
+};
+
+const div = (...content: any) => {
+  const obj = createDomElement<HTMLDivElement>('div', content);
+  return obj;
+};
+
+const directContainer = (...content: any) => {
+  let obj = null;
+  if (content.length === 2) {
+    // @ts-expect-error
+    obj = repeat(...content);
+  }
+  if (!obj) {
+    obj = createDomElement<HTMLDivElement>('div', content);
+  }
+  return obj;
+};
+
+const row = (...content: any) => {
+  const obj = directContainer(...content);
+  obj.el.className = 'popup-row';
+  return obj;
+};
+
+const col = (...content: any) => {
+  const obj = directContainer(...content);
+  obj.el.className = 'popup-column';
+  return obj;
+};
+
+function repeat(n: any, cb: (i: number) => any): any {
+  function getResult(count: number) {
+    let result: any = [];
+    for(let idx = 0; idx < clamp(count, 0, 300); idx++) {
+      result.push(cb(idx));
+    }
+    return result;
+  }
+
+  if (cb || typeof cb !== 'function') {
+    if (is.store(n)) {
+      const obj = createDomElement<HTMLDivElement>('div', ['result']);
+      n.watch(val => {
+        const res = getResult(parseInt(val, 10));
+        obj.el.innerHTML = '';
+        res.forEach(item => obj.el.appendChild(item?.el));
+      });
+      return obj;
+    } else if (typeof n === 'number'){
+      return createDomElement<HTMLDivElement>('div', getResult(n));
+    }
+  }
+  return null
+}
+
 // @ts-ignore
-Object.assign(window, { popup, button });
+Object.assign(window, {
+  render: popup,
+  button,
+  row,
+  col,
+  div,
+  grid,
+  input,
+  use,
+});
 
-type ControlCenterProps = {
-  value: string,
-  onChange: (e) => void,
-  data: UnitsWatchList,
-  mode: FragmentOptions,
-  onChange1: (e) => void,
-  callbackfn: ([k, v]: readonly [any, any]) => JSX.Element,
-  onChange2: (e) => void,
-  onChange3: (e) => void,
-  onChange4: (e) => void,
-  onChange5: () => FragmentOptions,
-  onChange6: () => FragmentOptions,
-  onChange7: (e) => void,
-  onChange8: () => FragmentOptions
-}
+const handleKeyDown = (e) => {
+  if (e.key === 'Enter' && e.ctrlKey) {
+    e.preventDefault();
+    e.stopPropagation();
+    run();
+  }
+};
 
-function ControlCenter(props: ControlCenterProps) {
-  return <div className="actions">
-    <div className="actions left">
-      <label>
-        Model
-        <select value={props.value} onChange={props.onChange}>
-          <option value="-all-">- All -</option>
-          {buildOptionsWithGroups({ data: props.data })}
-        </select>
-      </label>
-      <label>
-        &nbsp;
-        <select value={props.mode.labels} onChange={props.onChange1}>
-          {Object.entries(LabelModesMap).map(props.callbackfn,
-          )}
-        </select>
-      </label>
-      <label>
-        owners &nbsp;
-        <select value={props.mode.owners} onChange={props.onChange2}>
-          {subModeOptions()}
-        </select>
-      </label>
-
-      <label>
-        links &nbsp;
-        <select value={props.mode.links} onChange={props.onChange3}>
-          {subModeOptions()}
-        </select>
-      </label>
-
-      <label>
-        next &nbsp;
-        <select value={props.mode.next} onChange={props.onChange4}>
-          {subModeOptions()}
-        </select>
-      </label>
-
-      <label>
-        <input type="checkbox" checked={props.mode.shapes?.styled} onChange={props.onChange5} /> shapes
-      </label>
-
-      <label>
-        <input type="checkbox" checked={props.mode.shapes?.colored} onChange={props.onChange6} /> colors
-      </label>
-
-      <label>
-        &nbsp;
-        <select value={props.mode.preset} onChange={props.onChange7}>
-          <option value="show domains">show domains</option>
-          <option value="show internals">show internals</option>
-          <option value="hide domains">hide domains</option>
-        </select>
-      </label>
-    </div>
-    <div className="actions right">
-      <label>
-        &nbsp;
-        <input type="checkbox" checked={props.mode.autorun} onChange={props.onChange8} />
-        <button className="btn-run" onClick={run}>
-          Run
-        </button>
-      </label>
-    </div>
-  </div>;
-}
-
+const EDITOR_MINIMIZE_TIMEOUT = 2500;
 export const App = () => {
-  const [editor, setEditor] = useState(null);
+  // @ts-ignore
+  const [editor, setEditor] = useState<monaco.editor.IStandaloneCodeEditor>(null);
   const [height, setHeight] = useState(MIN_HEIGHT);
   const [hover, setHover] = useState(false);
-  const [domain, setDomain] = useState(Object.keys(domains)[1]);
 
   const refIde = useRef(null);
 
   const structure = useStore($unitsWatchList);
   const diagram = useStore($diagram);
-  const mode = useStore<FragmentOptions>($mode);
+  const mode = useStore<ViewSettings>($mode);
 
-  const toggleShapes = () => setMode({
-    ...mode,
-    shapes: { ...mode.shapes, styled: !mode.shapes?.styled },
-  });
-
-  const toggleColors = () => setMode({
-    ...mode,
-    shapes: { ...mode.shapes, colored: !mode.shapes?.colored },
-  });
-
-  const toggleAutorun = () => setMode({
-    ...mode,
-    autorun: !mode.autorun,
-  });
+  function maximizeEditor() {
+    clearTimeout(timer);
+    setHeight(MAX_HEIGHT);
+    setHover(true);
+  }
 
   useEffect(() => {
     const handleClick = () => {
@@ -235,7 +654,7 @@ export const App = () => {
 
   const [loaded, setLoaded] = useState(false);
 
-  const handleEditorChange = useCallback((value: any, event: any) => {
+  const handleEditorChange = useCallback((value: any, _event: any) => {
     loaded && save(value);
   }, [loaded]);
 
@@ -253,89 +672,114 @@ export const App = () => {
     setLoaded(true);
   }, [editor, setLoaded]);
 
-  return (
-    <div className="App">
-      <ControlCenter
-        value={domain}
-        onChange={(e) => setDomain(e.target.value)}
-        data={structure}
-        mode={mode}
-        onChange1={(e) => {
-          setMode({
-            ...mode,
-            labels: e.target.value as LabelModes,
-          });
-        }}
-        callbackfn={([k, v]) => (<option key={k} value={k}>{v}</option>)}
-        onChange2={(e) => {
-          setMode({
-            ...mode,
-            owners: e.target.value as LayoutSubMode,
-          });
-        }}
-        onChange3={(e) => {
-          setMode({
-            ...mode,
-            links: e.target.value as LayoutSubMode,
-          });
-        }}
-        onChange4={(e) => {
-          setMode({
-            ...mode,
-            next: e.target.value as LayoutSubMode,
-          });
-        }}
-        onChange5={toggleShapes}
-        onChange6={toggleColors}
-        onChange7={(e) => {
-          setMode({
-            ...mode,
-            preset: e.target.value as Presets,
-          });
-        }}
-        onChange8={toggleAutorun}
-      />
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown, true);
+    };
+  }, []);
 
-      <div className="graph">
+  const toggleAutorun = () => setMode({ ...mode, autorun: !mode.autorun });
+
+  return (
+    <div>
+      <AppBar position="static" sx={{ m: 0, p: 0 }}>
+        <Toolbar variant="dense" sx={{ boxShadow: 5, justifyContent: 'space-between' }} style={{ paddingRight: 8 }}>
+          <Stack direction="row" alignItems="center">
+            <IconButton edge="start" color="inherit" aria-label="menu">
+              <Menu />
+            </IconButton>
+            <Typography variant="h6" color="inherit">
+              Playground
+            </Typography>
+          </Stack>
+
+          <Stack direction="row"
+                 alignItems="center"
+                 divider={<Divider color="white" orientation="vertical" flexItem />}
+                 spacing={1}
+          >
+            <ViewSettingsPopup
+              data={structure}
+              mode={mode}
+              onChange={setMode}
+            />
+
+            <FormControlLabel
+              label="Autorun"
+              sx={{ pr: 2 }}
+              control={
+                <Checkbox
+                  checked={mode.autorun}
+                  onChange={toggleAutorun}
+                  sx={{
+                    color: grey[200],
+                    '&.Mui-checked': {
+                      color: grey[200],
+                    },
+                  }}
+                />
+              }
+            />
+
+            <Button
+              onClick={() => run()}
+              endIcon={mode.autorun ? <Autorenew /> : <PlayArrow />}
+              sx={{ ...toolbarButtonStyle, width: 80 }}
+            >
+              Run
+            </Button>
+          </Stack>
+        </Toolbar>
+      </AppBar>
+
+      <div id="graph"
+           className="graph"
+           style={{ height: `calc(100vh - 60px - ${MIN_HEIGHT})` }}
+      >
         <GraphViz dot={diagram} />
       </div>
 
-      <div className="ide" style={{ height }}
-           ref={refIde}
-           onMouseEnter={(e) => {
-             if (e.buttons !== 0) return;
-
-             clearTimeout(timer);
-             setHeight(MAX_HEIGHT);
-             setHover(true);
-           }}
-           onMouseLeave={() => {
-             timer = setTimeout(() => setHeight(MIN_HEIGHT), 1000);
-             setHover(false);
-           }}
+      <Box
+        className="ide"
+        style={{ height }}
+        ref={refIde}
+        onMouseDown={maximizeEditor}
+        onMouseEnter={(e) => {
+          if (e.buttons === 0) maximizeEditor();
+        }}
+        onMouseLeave={(e) => {
+          if (e.buttons === 0) {
+            timer = setTimeout(() => setHeight(MIN_HEIGHT), EDITOR_MINIMIZE_TIMEOUT);
+            setHover(false);
+          }
+        }}
       >
         <StructurePanel
           data={structure}
           editor={editor}
         />
+
         <Editor
           className="editor"
           height="100%"
-          defaultLanguage="typescript"
-          // defaultValue=""
+          defaultLanguage="javascript"
           onChange={handleEditorChange}
           theme="light"
-          onMount={(editor) => setEditor(editor)}
-          saveViewState={true}
+          onMount={(editor) => {
+            setEditor(editor);
+            editor.focus();
+          }}
+          saveViewState={false}
           options={{
             fontSize: 16,
             mouseWheelZoom: true,
             fontLigatures: true,
             fontFamily: 'Fira Code',
-            tabSize: 2
+            tabSize: 2,
           }}
         />
-      </div>
+      </Box>
     </div>
   );
 };

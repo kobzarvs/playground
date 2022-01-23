@@ -91,10 +91,6 @@ export type Cluster = {
 
 export type LayoutSubMode = 'visible' | 'transparent' | 'removed';
 
-export type Presets = 'show domains'
-  | 'show internals'
-  | 'hide domains'
-
 export type NodeDetails = {
   links: string;
   op: string;

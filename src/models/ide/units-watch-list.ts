@@ -1,5 +1,6 @@
-import { createEvent, createStore, sample, Unit } from 'effector';
+import { createEvent, createStore, sample } from 'effector';
 import { createIndex, requestCreateIndex } from '../graphite';
+import { Unit, Node } from '../../types';
 
 export const Groups = {
   events: 'Events',
@@ -8,7 +9,7 @@ export const Groups = {
   effects: 'Effects',
 };
 
-export type UnitsWatchList = Record<string, Unit<any>[]>;
+export type UnitsWatchList = Record<keyof typeof Groups, Node[]>;
 
 export const $unitsWatchList = createStore<UnitsWatchList>({
   events: [],
@@ -17,13 +18,13 @@ export const $unitsWatchList = createStore<UnitsWatchList>({
   effects: [],
 });
 
-export const addUnit = createEvent<{ group: string, unit: Unit<any> }>();
+export const addUnit = createEvent<{ group: keyof typeof Groups, unit: Unit<any> }>();
 
-export const removeUnit = createEvent<{ group: string, unit: Unit<any> }>();
+export const removeUnit = createEvent<{ group: keyof typeof Groups, unit: Unit<any> }>();
 
 export const reset = createEvent();
 
-export const units: Record<'domains' | 'events' | 'stores' | 'effects', Record<'push' | 'remove', (unit: Unit<any>) => void>> = {
+export const units: Record<keyof typeof Groups, Record<'push' | 'remove', (unit: Unit<any>) => void>> = {
   domains: {
     push: unit => addUnit({ group: 'domains', unit }),
     remove: unit => removeUnit({ group: 'domains', unit }),
@@ -45,15 +46,23 @@ export const units: Record<'domains' | 'events' | 'stores' | 'effects', Record<'
 $unitsWatchList
   .on(addUnit, (state, { group, unit }) => ({
     ...state,
-    [group]: [...state[group], unit],
+    [group]: [...state[group], unit.graphite],
   }))
   .on(removeUnit, (state, { group, unit }) => ({
     ...state,
     [group]: state[group].filter(u => {
-      // @ts-ignore
-      return u.id !== unit.id
+      return u.id !== unit.graphite.id
     }),
   }))
+  .on(createIndex.doneData, (state, data) => {
+    return {
+      ...state,
+      stores: [
+        ...state.stores,
+        ...Object.values(data.nodes).filter(n => n.meta?.op === 'store' && !state.stores.some(s => s.meta?.name === n.meta?.name))
+      ]
+    }
+  })
   .reset(reset);
 
 sample({

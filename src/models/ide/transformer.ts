@@ -1,14 +1,10 @@
 import { transform } from '@babel/standalone';
 import { execute } from './execute';
-import { debounce } from 'lodash';
+import { debounce, throttle } from 'lodash';
 import { requestCreateIndex } from '../graphite';
 import { babelPlugin } from '../../lib/effector-babel-plugin';
-import { $raw, LS_CODE_KEY } from './code';
+import { LS_CODE_KEY } from './code';
 
-
-export const run = () => transformCode();
-// @ts-ignore
-window.run = run;
 
 export const transformCode = async (raw?: any, event?: any) => {
   if (!raw) {
@@ -51,10 +47,15 @@ export const transformCode = async (raw?: any, event?: any) => {
       }],
     ],
   });
-  console.log(result.code);
+  // console.log(result.code);
   await execute(result);
 
   requestCreateIndex();
 };
 
-export const debouncedTransformCode = debounce(transformCode, 500);
+export const TRANSFORMATION_TIMEOUT = 1000;
+export const debouncedTransformCode = debounce(transformCode, TRANSFORMATION_TIMEOUT);
+export const run = throttle(transformCode, 500);
+
+// @ts-ignore
+window.r = run;

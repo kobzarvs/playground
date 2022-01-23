@@ -1,55 +1,38 @@
 import { renderNode } from './renderNode';
 import { renderLinks } from './renderLinks';
 import { createCluster } from './createCluster';
-import { GraphiteIndex, LabelModes, LayoutSubMode, Presets, Relations } from '../types';
+import { GraphiteIndex, LabelModes, Relations } from '../types';
 import { getUserLinks } from '../graphite/getUserLinks';
-
-export type FragmentOptions = {
-  labels?: LabelModes;
-  wrap?: string | boolean;
-  prefix?: string;
-  owners?: LayoutSubMode;
-  links?: LayoutSubMode;
-  next?: LayoutSubMode;
-  shapes?: {
-    styled?: boolean,
-    colored?: boolean,
-  },
-  domains?: boolean,
-  preset?: Presets,
-  autorun: boolean,
-}
+import { ViewSettings } from '../ide/view-settings';
 
 /**
  * buildFragment
  * @param graph
  * @param options
  */
-export function renderFragment(graph: GraphiteIndex, options?: FragmentOptions): string {
-  const opts: FragmentOptions = {
+export function renderFragment(graph: GraphiteIndex, options?: ViewSettings): string {
+  const opts: ViewSettings = {
     prefix: '',
     labels: LabelModes.NAME,
     owners: 'visible',
     links: 'transparent',
     next: 'visible',
-    shapes: {
-      styled: false,
-      colored: true,
-      ...options?.shapes,
-    },
+    styled: false,
+    colored: true,
     domains: true,
-    preset: 'show domains',
+    internals: false,
     autorun: true,
+    clasterization: false,
     ...options,
   };
 
-  const cluster = opts.wrap ? createCluster({ label: opts.wrap === true ? '' : opts.wrap }) : undefined;
+  const cluster = opts.clasterization ? createCluster({ label: opts.clasterization === true ? '' : opts.clasterization }) : undefined;
   opts.prefix = cluster?.id ? `${cluster.id}_` : opts.prefix;
 
   const nodes = Object.values(graph.nodes).map((node) => renderNode(node, opts)).join(';\n');
 
   let domainFragmet: string[] = [];
-  if (opts.preset === 'show internals') {
+  if (opts.domains && opts.internals) {
     domainFragmet = [
       renderLinks(graph.domains.next, 'next', opts),
       renderLinks(graph.domains.links, 'links', opts),
@@ -57,7 +40,7 @@ export function renderFragment(graph: GraphiteIndex, options?: FragmentOptions):
       Object.values(graph.domains.roots).map((node) => renderNode(node, opts)).join(';\n'),
       Object.values(graph.domains.nodes).map((node) => renderNode(node, opts)).join(';\n'),
     ];
-  } else if (opts.preset === 'show domains') {
+  } else if (opts.domains) {
     const domains: Relations = {
       links: getUserLinks(graph.domains, 'links', graph.nodes),
       owners: getUserLinks(graph.domains, 'owners', graph.nodes),

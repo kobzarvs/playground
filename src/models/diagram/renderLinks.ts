@@ -1,9 +1,9 @@
-import { FragmentOptions } from './renderFragment';
 import { EdgeColors } from '../const';
 import { Edges, EdgeTypes, ShapeTypes } from '../types';
 import { getOp, getShapeType } from '../helpers';
+import { ViewSettings } from '../ide/view-settings';
 
-export function renderLinks(edges: Edges, type: EdgeTypes, opts: FragmentOptions, priority = false): string {
+export function renderLinks(edges: Edges, type: EdgeTypes, opts: ViewSettings, priority = false): string {
   if (opts[type] === 'removed') return '';
   let linkColor = opts[type] === 'visible' ? EdgeColors[type] : 'transparent';
 

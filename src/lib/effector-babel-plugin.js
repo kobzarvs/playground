@@ -1,6 +1,4 @@
-import { Node } from '@babel/types';
-
-export function babelPlugin(babel: { types: any; template: any }, options = {}) {
+export function babelPlugin(babel, options = {}) {
   const {
     addNames,
     addLoc,
@@ -272,7 +270,7 @@ export function babelPlugin(babel: { types: any; template: any }, options = {}) 
             this.effector_factoryMap = new Map();
             if (!factoryTemplate) {
               let tpl;
-              factoryTemplate = template(
+              let factoryTemplate = template(
                 addLoc
                   ? 'FACTORY({sid: SID,fn:()=>FN,name:NAME,method:METHOD,loc:LOC})'
                   : addNames
@@ -768,7 +766,7 @@ function setEventNameAfter(path, state, nameNodeId, t, { addLoc, addNames, debug
   }
 }
 
-function stripExtension(path: string) {
+function stripExtension(path) {
   const ext = path.split('.').slice(-1)[0];
   if (ext.length > 0) {
     path = path.slice(0, -(ext.length + 1));
@@ -776,7 +774,7 @@ function stripExtension(path: string) {
   return path;
 }
 
-function stripRoot(babelRoot: any, fileName: string, omitFirstSlash: boolean) {
+function stripRoot(babelRoot, fileName, omitFirstSlash) {
   // const {sep, normalize} = require('path')
   const rawPath = fileName.replace(babelRoot, '');
   let normalizedSeq = [rawPath.split('/')]; //normalize(rawPath).split('/')
@@ -790,7 +788,7 @@ function stripRoot(babelRoot: any, fileName: string, omitFirstSlash: boolean) {
 /**
  * "foo src/index.js [12,30]"
  */
-function generateStableID(babelRoot: any, fileName: any, varName: any, line: any, column: any, debugSids: any) {
+function generateStableID(babelRoot, fileName, varName, line, column, debugSids) {
   const normalizedPath = stripRoot(babelRoot, fileName, false);
   const appendix = debugSids ? `:${normalizedPath}:${varName}` : '';
   return hashCode(`${varName} ${normalizedPath} [${line}, ${column}]`) + appendix;
@@ -804,10 +802,10 @@ function hashCode(s) {
   return h.toString(36);
 }
 
-function property(t: { objectProperty: (arg0: any, arg1: any) => any; identifier: (arg0: any) => any; }, field: string, content: never) {
+function property(t, field, content) {
   return t.objectProperty(t.identifier(field), content);
 }
 
-function stringProperty(t: { stringLiteral?: any; objectProperty?: (arg0: any, arg1: any) => any; identifier?: (arg0: any) => any; }, field: string, value: string) {
+function stringProperty(t, field, value) {
   return property(t, field, t.stringLiteral(value));
 }

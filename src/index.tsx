@@ -1,15 +1,22 @@
-import React from 'react';
+import React, { useState } from 'react';
 import ReactDOM from 'react-dom';
-import './lib/log';
+import { theme } from './theme';
 import './index.css';
+import './lib/log';
 import { App } from './app';
-import './examples/todo-list-with-validation';
-import './examples/glitch';
-import './examples/counter';
-import './examples/inputName';
-import './lib/load-effector-babel-plugin';
+import { ThemeProvider } from '@mui/material';
+
+const Application = () => {
+  const [currentTheme, setTheme] = useState(theme);
+
+  return (
+    <ThemeProvider theme={currentTheme}>
+      <App />
+    </ThemeProvider>
+  );
+};
 
 ReactDOM.render(
-  <App />,
+  <Application />,
   document.getElementById('app-root'),
 );
